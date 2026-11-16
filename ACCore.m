@@ -314,6 +314,14 @@ CGPoint ACRandomPointInRect(CGRect rect) {
                        rect.origin.y + ry * rect.size.height);
 }
 
+/// 单点模式下，在 point 周围 radius 范围内随机取点（模拟真人不戳同一个像素）。
+static CGPoint ACRandomPointNear(CGPoint center, CGFloat radius) {
+    if (radius <= 0) return center;
+    CGFloat dx = (CGFloat)arc4random_uniform((uint32_t)(radius * 2)) - radius;
+    CGFloat dy = (CGFloat)arc4random_uniform((uint32_t)(radius * 2)) - radius;
+    return CGPointMake(center.x + dx, center.y + dy);
+}
+
 #pragma mark - 引擎
 
 @interface ACEngine ()
@@ -337,6 +345,7 @@ CGPoint ACRandomPointInRect(CGRect rect) {
         _mode     = ACTapModePoint;
         _point    = CGPointMake(200, 400);
         _region   = CGRectZero;
+        _randomRadius = 0;
         _running  = NO;
         _tapCount = 0;
         _queue = dispatch_queue_create("com.acme.autoclicker.tap", DISPATCH_QUEUE_SERIAL);
@@ -363,8 +372,8 @@ CGPoint ACRandomPointInRect(CGRect rect) {
     uint64_t intervalNs = (uint64_t)(iv * (double)NSEC_PER_SEC);
     uint64_t leewayNs   = (uint64_t)(2 * NSEC_PER_MSEC);
 
-    ACDLog(@"engine start: interval=%.3fs max=%ld mode=%ld point=(%.1f,%.1f) region=(%.1f,%.1f,%.1f,%.1f) channel=%@",
-           iv, (long)_maxTaps, (long)_mode, _point.x, _point.y,
+    ACDLog(@"engine start: interval=%.3fs max=%ld mode=%ld point=(%.1f,%.1f) randomR=%.1f region=(%.1f,%.1f,%.1f,%.1f) channel=%@",
+           iv, (long)_maxTaps, (long)_mode, _point.x, _point.y, _randomRadius,
            _region.origin.x, _region.origin.y, _region.size.width, _region.size.height,
            ACInjectChannelName(ACInjectActiveChannel()));
 
@@ -377,7 +386,16 @@ CGPoint ACRandomPointInRect(CGRect rect) {
         __strong typeof(self) self_ = weakSelf;
         if (!self_ || !self_.running) return;
 
-        CGPoint p = (self_.mode == ACTapModeRegion) ? ACRandomPointInRect(self_.region) : self_.point;
+        CGPoint p;
+        if (self_.mode == ACTapModeRegion) {
+            p = ACRandomPointInRect(self_.region);
+        } else if (self_.randomRadius > 0) {
+            // 单点模式 + 随机半径：在圆心周围 ±randomRadius 内随机落点
+            p = ACRandomPointNear(self_.point, self_.randomRadius);
+        } else {
+            p = self_.point;
+        }
+
         dispatch_async(dispatch_get_main_queue(), ^{
             __strong typeof(self) strong = weakSelf;
             if (strong.willTap) strong.willTap();
@@ -428,6 +446,7 @@ CGPoint ACRandomPointInRect(CGRect rect) {
     [d setInteger:self.mode    forKey:@"ac_mode"];
     [d setDouble:self.point.x  forKey:@"ac_point_x"];
     [d setDouble:self.point.y  forKey:@"ac_point_y"];
+    [d setDouble:self.randomRadius forKey:@"ac_randomRadius"];
     [d setDouble:self.region.origin.x    forKey:@"ac_region_x"];
     [d setDouble:self.region.origin.y    forKey:@"ac_region_y"];
     [d setDouble:self.region.size.width  forKey:@"ac_region_w"];
@@ -440,6 +459,7 @@ CGPoint ACRandomPointInRect(CGRect rect) {
     if ([d objectForKey:@"ac_interval"]) self.interval = [d doubleForKey:@"ac_interval"];
     if ([d objectForKey:@"ac_maxTaps"])  self.maxTaps  = [d integerForKey:@"ac_maxTaps"];
     if ([d objectForKey:@"ac_mode"])     self.mode     = (ACTapMode)[d integerForKey:@"ac_mode"];
+    if ([d objectForKey:@"ac_randomRadius"]) self.randomRadius = [d doubleForKey:@"ac_randomRadius"];
 
     if ([d objectForKey:@"ac_point_x"]) {
         self.point = CGPointMake([d doubleForKey:@"ac_point_x"], [d doubleForKey:@"ac_point_y"]);
@@ -449,6 +469,7 @@ CGPoint ACRandomPointInRect(CGRect rect) {
                                  [d doubleForKey:@"ac_region_w"], [d doubleForKey:@"ac_region_h"]);
     }
     if (self.interval < 0.02 || self.interval > 5.0) self.interval = 0.20;
+    if (self.randomRadius < 0 || self.randomRadius > 100) self.randomRadius = 0;
 }
 
 @end
