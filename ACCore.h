@@ -54,6 +54,7 @@ CGPoint ACRandomPointInRect(CGRect rect);
 @property (nonatomic, assign) ACTapMode   mode;
 @property (nonatomic, assign) NSTimeInterval interval;  // 点击间隔，0.02 ~ 5.0 秒
 @property (nonatomic, assign) NSInteger   maxTaps;    // 0 = 无限
+@property (nonatomic, assign) CGFloat     randomRadius; // 单点模式随机偏移半径（pt），0 = 固定戳圆心
 
 @property (nonatomic, assign, readonly) BOOL      running;
 @property (nonatomic, assign, readonly) NSInteger tapCount;
