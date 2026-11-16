@@ -10,7 +10,7 @@
 
 #define AC_ICON_SIZE 56.0
 #define AC_PANEL_W   280.0
-#define AC_PANEL_H   424.0
+#define AC_PANEL_H   474.0
 #define AC_SIDE      16.0
 
 static const CGFloat kACWindowLevel    = 10000200.0;   // SpringBoard 下的悬浮球层
@@ -139,9 +139,11 @@ static UIView *ACHostFallbackView(void) {
 @property (nonatomic, strong) UILabel  *statusLabel;
 @property (nonatomic, strong) UILabel  *intervalLabel;
 @property (nonatomic, strong) UILabel  *countLabel;
+@property (nonatomic, strong) UILabel  *randomLabel;
 @property (nonatomic, strong) UILabel  *regionLabel;
 @property (nonatomic, strong) UISlider *intervalSlider;
 @property (nonatomic, strong) UISlider *countSlider;
+@property (nonatomic, strong) UISlider *randomSlider;
 @property (nonatomic, strong) UIButton *actionBtn;
 @property (nonatomic, strong) UIButton *channelBtn;
 @property (nonatomic, strong) UIView   *logView;
@@ -363,7 +365,7 @@ static UIView *ACHostFallbackView(void) {
 
     // 版本角标：装错包/装了旧包是最常见的"没效果"来源，一眼就能确认
     UILabel *badge = [[UILabel alloc] initWithFrame:CGRectMake(s - 26, -6, 32, 15)];
-    badge.text = @"1.41";
+    badge.text = @"1.42";
     badge.textColor = [UIColor colorWithRed:1.0 green:0.42 blue:0.32 alpha:1.0];
     badge.font = [UIFont boldSystemFontOfSize:9.5];
     badge.textAlignment = NSTextAlignmentCenter;
@@ -498,32 +500,50 @@ static UIView *ACHostFallbackView(void) {
                forControlEvents:UIControlEventValueChanged];
     [p addSubview:self.countSlider];
 
-    // 区域
+    // 随机范围（单点模式下在圆心周围 ±N pt 随机偏移）
+    UILabel *t4 = [self makeLabel:@"随机范围" size:13 color:[UIColor whiteColor] bold:NO];
+    t4.frame = CGRectMake(AC_SIDE, 204, 120, 20);
+    [p addSubview:t4];
+
+    self.randomLabel = [self makeLabel:@"0 pt（固定点）" size:13 color:dim bold:NO];
+    self.randomLabel.textAlignment = NSTextAlignmentRight;
+    self.randomLabel.frame = CGRectMake(AC_PANEL_W - AC_SIDE - 130, 204, 130, 20);
+    [p addSubview:self.randomLabel];
+
+    self.randomSlider = [[UISlider alloc] initWithFrame:CGRectMake(AC_SIDE, 226, innerW, 28)];
+    self.randomSlider.minimumValue = 0.0;
+    self.randomSlider.maximumValue = 30.0;   // 0~30 pt
+    self.randomSlider.minimumTrackTintColor = [UIColor colorWithRed:0.98 green:0.72 blue:0.30 alpha:1];
+    [self.randomSlider addTarget:self action:@selector(onRandomChanged:)
+                 forControlEvents:UIControlEventValueChanged];
+    [p addSubview:self.randomSlider];
+
+    // 位置
     UILabel *t3 = [self makeLabel:@"点击位置" size:13 color:[UIColor whiteColor] bold:NO];
-    t3.frame = CGRectMake(AC_SIDE, 204, 120, 20);
+    t3.frame = CGRectMake(AC_SIDE, 264, 120, 20);
     [p addSubview:t3];
 
     self.regionLabel = [self makeLabel:@"点 (200, 400)" size:13 color:dim bold:NO];
     self.regionLabel.textAlignment = NSTextAlignmentRight;
-    self.regionLabel.frame = CGRectMake(AC_PANEL_W - AC_SIDE - 150, 204, 150, 20);
+    self.regionLabel.frame = CGRectMake(AC_PANEL_W - AC_SIDE - 150, 264, 150, 20);
     [p addSubview:self.regionLabel];
 
     CGFloat bw = (innerW - 10) / 2.0;
     UIButton *pick = [self makeButton:@"选 点" action:@selector(beginPickPoint)];
-    pick.frame = CGRectMake(AC_SIDE, 230, bw, 32);
+    pick.frame = CGRectMake(AC_SIDE, 290, bw, 32);
     [p addSubview:pick];
 
     UIButton *box = [self makeButton:@"框选区域" action:@selector(beginPickRegion)];
-    box.frame = CGRectMake(AC_SIDE + bw + 10, 230, bw, 32);
+    box.frame = CGRectMake(AC_SIDE + bw + 10, 290, bw, 32);
     [p addSubview:box];
 
     UIButton *clear = [self makeButton:@"清除区域（回到单点）" action:@selector(clearRegion)];
-    clear.frame = CGRectMake(AC_SIDE, 270, innerW, 30);
+    clear.frame = CGRectMake(AC_SIDE, 330, innerW, 30);
     clear.titleLabel.font = [UIFont systemFontOfSize:12.5];
     clear.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.07];
     [p addSubview:clear];
 
-    UIView *line2 = [[UIView alloc] initWithFrame:CGRectMake(AC_SIDE, 312, innerW, 0.5)];
+    UIView *line2 = [[UIView alloc] initWithFrame:CGRectMake(AC_SIDE, 372, innerW, 0.5)];
     line2.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.12];
     [p addSubview:line2];
 
@@ -531,7 +551,7 @@ static UIView *ACHostFallbackView(void) {
     // 自动选错时让用户自己试一次最快。
     CGFloat hw = (innerW - 10) / 2.0;
     UIButton *chBtn = [self makeButton:@"通道" action:@selector(onSwitchChannel)];
-    chBtn.frame = CGRectMake(AC_SIDE, 320, hw, 32);
+    chBtn.frame = CGRectMake(AC_SIDE, 380, hw, 32);
     chBtn.titleLabel.font = [UIFont systemFontOfSize:12];
     chBtn.titleLabel.adjustsFontSizeToFitWidth = YES;
     chBtn.titleLabel.minimumScaleFactor = 0.75;
@@ -539,14 +559,14 @@ static UIView *ACHostFallbackView(void) {
     self.channelBtn = chBtn;
 
     UIButton *logBtn = [self makeButton:@"查看日志" action:@selector(showLog)];
-    logBtn.frame = CGRectMake(AC_SIDE + hw + 10, 320, hw, 32);
+    logBtn.frame = CGRectMake(AC_SIDE + hw + 10, 380, hw, 32);
     logBtn.titleLabel.font = [UIFont systemFontOfSize:12];
     logBtn.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.07];
     [p addSubview:logBtn];
 
     // 主按钮
     UIButton *act = [self makeButton:@"开 始" action:@selector(onAction)];
-    act.frame = CGRectMake(AC_SIDE, 362, innerW, 44);
+    act.frame = CGRectMake(AC_SIDE, 422, innerW, 44);
     act.layer.cornerRadius = 12;
     act.titleLabel.font = [UIFont boldSystemFontOfSize:17];
     act.backgroundColor = [UIColor colorWithRed:0.18 green:0.68 blue:0.36 alpha:1.0];
@@ -621,6 +641,17 @@ static UIView *ACHostFallbackView(void) {
     [[ACEngine shared] saveSettings];
     self.countLabel.text = (taps == 0) ? @"无限"
                                        : [NSString stringWithFormat:@"%ld 次", (long)taps];
+}
+
+- (void)onRandomChanged:(UISlider *)s {
+    CGFloat v = s.value;   // 0~30 pt
+    [ACEngine shared].randomRadius = v;
+    [[ACEngine shared] saveSettings];
+    if (v < 0.5) {
+        self.randomLabel.text = @"0 pt（固定点）";
+    } else {
+        self.randomLabel.text = [NSString stringWithFormat:@"±%.0f pt", v];
+    }
 }
 
 - (void)onAction {
@@ -764,6 +795,14 @@ static UIView *ACHostFallbackView(void) {
     self.countLabel.text = (taps <= 0) ? @"无限"
                                        : [NSString stringWithFormat:@"%ld 次", (long)taps];
     self.countSlider.value = MIN(1.0, MAX(0.0, (double)taps / 500.0));
+
+    // 随机范围
+    self.randomSlider.value = e.randomRadius;
+    if (e.randomRadius < 0.5) {
+        self.randomLabel.text = @"0 pt（固定点）";
+    } else {
+        self.randomLabel.text = [NSString stringWithFormat:@"±%.0f pt", e.randomRadius];
+    }
 
     if (e.mode == ACTapModeRegion && !CGRectIsEmpty(e.region)) {
         self.regionLabel.text = [NSString stringWithFormat:@"区域 %.0f × %.0f",
